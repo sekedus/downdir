@@ -23,7 +23,23 @@ async function parsePath(
 	}
 }
 
-export default async function getRepositoryInfo(
+export function isMainDirectory(url: string) {
+	if (!url) {
+		return false;
+	}
+
+	const [, user, repository, type, ...parts] = cleanUrl(
+		decodeURIComponent(new URL(url).pathname),
+	).split('/');
+
+	if ((!user || !repository) || (type && type !== 'tree')) {
+		return false;
+	}
+
+	return !type || parts.length === 1;
+}
+
+export async function getRepositoryInfo(
 	url: string,
 ): Promise<
 	| {error: string}
@@ -63,12 +79,16 @@ export default async function getRepositoryInfo(
 		return {error: 'REPOSITORY_NOT_FOUND'};
 	}
 
-	const {private: isPrivate} = await repoInfoResponse.json() as {private: boolean};
+	const {private: isPrivate, default_branch: gitReference} = await repoInfoResponse.json() as {
+		private: boolean;
+		default_branch: string;
+	};
 
 	if (parts.length === 0) {
 		return {
 			user,
 			repository,
+			gitReference,
 			directory: '',
 			isPrivate,
 			downloadUrl: `https://api.github.com/repos/${user}/${repository}/zipball`,

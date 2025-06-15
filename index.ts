@@ -9,9 +9,9 @@ import {
 } from 'list-github-dir-content';
 import pMap from 'p-map';
 import {downloadFile} from './download.js';
-import getRepositoryInfo from './repository-info.js';
+import {getRepositoryInfo, isMainDirectory} from './repository-info.js';
 
-type ApiOptions = ListGithubDirectoryOptions & {getFullData: true};
+type ApiOptions = ListGithubDirectoryOptions & {getFullData: true; isPrivate: boolean};
 
 function isError(error: unknown): error is Error {
 	return error instanceof Error;
@@ -30,12 +30,14 @@ async function listFiles(
 	repoListingConfig: ApiOptions,
 ): Promise<Array<TreeResponseObject | ContentsReponseObject>> {
 	const files = await getDirectoryContentViaTreesApi(repoListingConfig);
-
-	if (!files.truncated) {
+	if (!files.truncated && files.length > 0) {
 		return files;
 	}
 
-	updateStatus('Warning: It’s a large repo and this it take a long while just to download the list of files. You might want to use "git sparse checkout" instead.');
+	if (files.truncated) {
+		updateStatus('⚠️ It’s a large repo and this it take a long while just to download the list of files. You might want to use "git sparse checkout" instead.');
+	}
+
 	return getDirectoryContentViaContentsApi(repoListingConfig);
 }
 
@@ -59,12 +61,7 @@ async function getZip() {
 	return new JSZip();
 }
 
-const googleDoesntLikeThis = /malware|virus|trojan/i;
-
-async function init() {
-	updateStatus();
-	const zipPromise = getZip();
-
+function tokenInput() {
 	const input = document.querySelector('input#token')!;
 	const token = localStorage.getItem('token');
 	if (token) {
@@ -72,12 +69,53 @@ async function init() {
 	}
 
 	input.addEventListener('input', () => {
-		localStorage.setItem('token', input.value);
-	}, {passive: true});
+		if (input.validity.valid) {
+			localStorage.setItem('token', input.value);
+		}
+	});
+
+	document.querySelector('button#clear')!.addEventListener('click', () => {
+		input.value = '';
+		localStorage.removeItem('token');
+	});
+}
+
+function urlInput(url: string, query: URLSearchParams, repofolder: HTMLInputElement) {
+	const input = document.querySelector('input#url')!;
+	input.value = url;
+	let main = isMainDirectory(input.value);
+
+	input.addEventListener('input', async () => {
+		main = isMainDirectory(input.value);
+		if (main) {
+			repofolder.parentElement!.classList.remove('no-items');
+		} else {
+			repofolder.parentElement!.classList.add('no-items');
+		}
+	});
+
+	if (main) {
+		if (query.has('without_repo_folder')) {
+			repofolder.checked = true;
+		}
+
+		repofolder.parentElement!.classList.remove('no-items');
+	}
+}
+
+const googleDoesntLikeThis = /malware|virus|trojan/i;
+
+async function init() {
+	updateStatus();
+	const zipPromise = getZip();
 
 	const query = new URLSearchParams(location.search);
 	const url = query.get('url');
-	document.querySelector('input#url')!.value = url ?? '';
+	const withoutRepoFolder = document.querySelector('input#repo-folder')!;
+
+	urlInput(url ?? '', query, withoutRepoFolder);
+	tokenInput();
+
 	if (!url) {
 		return;
 	}
@@ -88,7 +126,7 @@ async function init() {
 	}
 
 	if (!navigator.onLine) {
-		updateStatus('⚠ You are offline.');
+		updateStatus('⚠️ You are offline.');
 		throw new Error('You are offline');
 	}
 
@@ -97,13 +135,13 @@ async function init() {
 	if ('error' in parsedPath) {
 		// eslint-disable-next-line unicorn/prefer-switch -- I hate how it looks
 		if (parsedPath.error === 'NOT_A_REPOSITORY') {
-			updateStatus('⚠ Not a repository');
+			updateStatus('⚠️ Not a repository');
 		} else if (parsedPath.error === 'NOT_A_DIRECTORY') {
-			updateStatus('⚠ Not a directory');
+			updateStatus('⚠️ Not a directory');
 		} else if (parsedPath.error === 'REPOSITORY_NOT_FOUND') {
-			updateStatus('⚠ Repository not found. If it’s private, you should enter a token that can access it.');
+			updateStatus('⚠️ Repository not found. If it’s private, you should enter a token that can access it.');
 		} else {
-			updateStatus('⚠ Unknown error');
+			updateStatus('⚠️ Unknown error');
 		}
 
 		return;
@@ -120,9 +158,17 @@ async function init() {
 		},
 	});
 
-	if ('downloadUrl' in parsedPath) {
-		updateStatus('Downloading the entire repository directly from GitHub');
-		window.location.href = parsedPath.downloadUrl;
+	const controller = new AbortController();
+	const signal = controller.signal;
+
+	if ('downloadUrl' in parsedPath && !withoutRepoFolder.checked) {
+		if (isPrivate) {
+			updateStatus('⚠️ Cannot download the entire private repository directly from GitHub. Downloading files "without repo folder" instead.');
+		} else {
+			updateStatus('Downloading the entire repository directly from GitHub');
+			window.location.href = parsedPath.downloadUrl;
+		}
+
 		return;
 	}
 
@@ -135,6 +181,7 @@ async function init() {
 		directory,
 		token: localStorage.getItem('token') ?? undefined,
 		getFullData: true,
+		isPrivate,
 	});
 
 	if (files.length === 0) {
@@ -148,9 +195,6 @@ async function init() {
 	}
 
 	updateStatus(`Will download ${files.length} files`);
-
-	const controller = new AbortController();
-	const signal = controller.signal;
 
 	let downloaded = 0;
 
@@ -169,7 +213,8 @@ async function init() {
 			updateStatus(file.path);
 
 			const zip = await zipPromise;
-			zip.file(file.path.replace(directory + '/', ''), blob, {
+			const filePath = directory ? file.path.replace(directory + '/', '') : file.path;
+			zip.file(filePath, blob, {
 				binary: true,
 			});
 		}, {concurrency: 20});
@@ -177,12 +222,12 @@ async function init() {
 		controller.abort();
 
 		if (!navigator.onLine) {
-			updateStatus('⚠ Could not download all files, network connection lost.');
+			updateStatus('⚠️ Could not download all files, network connection lost.');
 		} else if (isError(error) && error.message.startsWith('HTTP ')) {
-			updateStatus('⚠ Could not download all files.');
+			updateStatus('⚠️️ Could not download all files.');
 		} else {
 			updateStatus(
-				'⚠ Some files were blocked from downloading, try to disable any ad blockers and refresh the page.',
+				'⚠️️ Some files were blocked from downloading, try to disable any ad blockers and refresh the page.',
 			);
 		}
 
@@ -196,9 +241,13 @@ async function init() {
 		type: 'blob',
 	});
 
-	const filename
-		= query.get('filename')
-		?? `${user} ${repository} ${gitReference} ${directory}`.replace(/\//, '-');
+	const filename = query.get('filename')
+		?? [
+			user,
+			repository,
+			gitReference,
+			directory ? directory.replaceAll('/', '-') : undefined,
+		].filter(Boolean).join('-');
 
 	const zipFilename = filename.endsWith('.zip') ? filename : `${filename}.zip`;
 	saveFile(zipBlob, zipFilename);
@@ -210,7 +259,7 @@ void init().catch(error => {
 	if (error instanceof Error) {
 		switch (error.message) {
 			case 'Invalid token': {
-				updateStatus('⚠ The token provided is invalid or has been revoked.', {
+				updateStatus('⚠️ The token provided is invalid or has been revoked.', {
 					token: localStorage.getItem('token'),
 				});
 				break;
@@ -218,14 +267,14 @@ void init().catch(error => {
 
 			case 'Rate limit exceeded': {
 				updateStatus(
-					'⚠ Your token rate limit has been exceeded. Please wait or add a token',
+					'⚠️ Your token rate limit has been exceeded. Please wait or add a token',
 					{token: localStorage.getItem('token')},
 				);
 				break;
 			}
 
 			default: {
-				updateStatus(`⚠ ${error.message}`, error);
+				updateStatus(`⚠️ ${error.message}`, error);
 				break;
 			}
 		}

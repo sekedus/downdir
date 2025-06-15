@@ -1,5 +1,5 @@
 import {test, expect} from 'vitest';
-import getRepositoryInfo from './repository-info.js';
+import {getRepositoryInfo} from './repository-info.js';
 
 test('getRepositoryInfo', async () => {
 	await expect(getRepositoryInfo('https://github.com/user')).resolves.toMatchInlineSnapshot(`
@@ -55,6 +55,7 @@ test('getRepositoryInfo', async () => {
 		{
 		  "directory": "",
 		  "downloadUrl": "https://api.github.com/repos/microsoft/typescript/zipball",
+		  "gitReference": "main",
 		  "isPrivate": false,
 		  "repository": "typescript",
 		  "user": "microsoft",
@@ -79,4 +80,4 @@ test('getRepositoryInfo', async () => {
 		  "user": "wesbos",
 		}
 	`);
-});
+}, {timeout: 10_000});
