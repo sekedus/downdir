@@ -45,10 +45,10 @@ function updateStatus(status?: string, ...extra: unknown[]) {
 	const element = document.querySelector('.status')!;
 	if (status) {
 		const wrapper = document.createElement('div');
-		wrapper.textContent = status;
+		wrapper.innerHTML = status;
 		element.prepend(wrapper);
 	} else {
-		element.textContent = status ?? '';
+		element.innerHTML = status ?? '';
 	}
 
 	console.log(status, ...extra);
@@ -101,6 +101,21 @@ function urlInput(url: string, query: URLSearchParams, repofolder: HTMLInputElem
 
 		repofolder.parentElement!.classList.remove('no-items');
 	}
+}
+
+function directDownload(parsedPath: Record<string, unknown>, withoutRepoFolder: HTMLInputElement, isPrivate: boolean) {
+	if ('downloadUrl' in parsedPath && !withoutRepoFolder.checked) {
+		if (isPrivate) {
+			updateStatus('⚠️ Cannot download the entire private repository directly from GitHub. Downloading files "without repo folder" instead.<br>This is related to CORS restrictions. More details: <a href="https://github.com/orgs/community/discussions/106849" target="_blank">community/community#106849</a>');
+		} else {
+			updateStatus('Downloading the entire repository directly from GitHub');
+			window.location.href = parsedPath['downloadUrl'] as string;
+		}
+
+		return true;
+	}
+
+	return false;
 }
 
 const googleDoesntLikeThis = /malware|virus|trojan/i;
@@ -161,14 +176,7 @@ async function init() {
 	const controller = new AbortController();
 	const signal = controller.signal;
 
-	if ('downloadUrl' in parsedPath && !withoutRepoFolder.checked) {
-		if (isPrivate) {
-			updateStatus('⚠️ Cannot download the entire private repository directly from GitHub. Downloading files "without repo folder" instead.');
-		} else {
-			updateStatus('Downloading the entire repository directly from GitHub');
-			window.location.href = parsedPath.downloadUrl;
-		}
-
+	if (directDownload(parsedPath, withoutRepoFolder, isPrivate)) {
 		return;
 	}
 
