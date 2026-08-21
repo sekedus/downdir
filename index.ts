@@ -9,7 +9,7 @@ import {
 } from 'list-github-dir-content';
 import pMap from 'p-map';
 import {downloadFile} from './download.js';
-import {getRepositoryInfo, isMainDirectory} from './repository-info.js';
+import {isMainDirectory, getRepositoryInfo, getRepositoryPreview} from './repository-info.js';
 
 type ApiOptions = ListGithubDirectoryOptions & {getFullData: true; isPrivate: boolean};
 
@@ -135,17 +135,27 @@ async function init() {
 		return;
 	}
 
-	if (googleDoesntLikeThis.test(url)) {
-		updateStatus('Virus, malware, trojans are not allowed');
-		return;
-	}
-
 	if (!navigator.onLine) {
 		updateStatus('⚠️ You are offline.');
 		throw new Error('You are offline');
 	}
 
-	const parsedPath = await getRepositoryInfo(url);
+	const repositoryPreview = getRepositoryPreview(url);
+	if ('error' in repositoryPreview) {
+		if (repositoryPreview.error === 'NOT_A_REPOSITORY') {
+			updateStatus('⚠ Not a repository');
+		} else if (repositoryPreview.error === 'NOT_A_DIRECTORY') {
+			updateStatus('⚠ Not a directory');
+		} else {
+			updateStatus('⚠ Unknown error');
+		}
+
+		return;
+	}
+
+	updateStatus(`Repo: ${repositoryPreview.user}/${repositoryPreview.repository}`);
+
+	const parsedPath = await getRepositoryInfo(repositoryPreview);
 
 	if ('error' in parsedPath) {
 		// eslint-disable-next-line unicorn/prefer-switch -- I hate how it looks
@@ -163,7 +173,7 @@ async function init() {
 	}
 
 	const {user, repository, gitReference, directory, isPrivate} = parsedPath;
-	updateStatus(`Repo: ${user}/${repository}\nDirectory: /${directory}`, {
+	updateStatus(`Directory: /${directory}`, {
 		source: {
 			user,
 			repository,
@@ -182,7 +192,7 @@ async function init() {
 
 	updateStatus('Retrieving directory info');
 
-	const files = await listFiles({
+	let files = await listFiles({
 		user,
 		repository,
 		ref: gitReference,
@@ -191,14 +201,24 @@ async function init() {
 		getFullData: true,
 		isPrivate,
 	});
+	let foundBlockedFiles = false;
+
+	files = files.filter(file => {
+		if (googleDoesntLikeThis.test(file.path)) {
+			foundBlockedFiles = true;
+			updateStatus(`File blocked: ${file.path}`);
+			return false;
+		}
+
+		return true;
+	});
 
 	if (files.length === 0) {
-		updateStatus('No files to download');
-		return;
-	}
+		if (foundBlockedFiles) {
+			updateStatus('⚠ Some files were blocked due to Google Safe Browsing.');
+		}
 
-	if (files.some(file => googleDoesntLikeThis.test(file.path))) {
-		updateStatus('Virus, malware, trojans are not allowed');
+		updateStatus('No files to download');
 		return;
 	}
 
@@ -208,7 +228,7 @@ async function init() {
 
 	try {
 		await pMap(files, async file => {
-			const blob = downloadFile({
+			const blob = await downloadFile({
 				user,
 				repository,
 				reference: gitReference!,
@@ -259,6 +279,10 @@ async function init() {
 
 	const zipFilename = filename.endsWith('.zip') ? filename : `${filename}.zip`;
 	saveFile(zipBlob, zipFilename);
+	if (foundBlockedFiles) {
+		updateStatus('⚠ Some files were blocked due to Google Safe Browsing.');
+	}
+
 	updateStatus(`Downloaded ${downloaded} files! Done!`);
 }
 

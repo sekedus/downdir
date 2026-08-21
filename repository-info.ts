@@ -6,6 +6,33 @@ function cleanUrl(url: string) {
 		.replace(/[/]$/, ''); // Drop trailing slash
 }
 
+export function getRepositoryPreview(url: string):
+| {error: 'NOT_A_REPOSITORY' | 'NOT_A_DIRECTORY'}
+| {user: string; repository: string; parts: string[]; directory: string} {
+	const [, user, repository, ...restPathParts] = cleanUrl(
+		decodeURIComponent(new URL(url).pathname),
+	).split('/');
+	const type = restPathParts[0];
+
+	if (!user || !repository) {
+		return {error: 'NOT_A_REPOSITORY'};
+	}
+
+	if (type && type !== 'tree') {
+		return {error: 'NOT_A_DIRECTORY'};
+	}
+
+	const directoryParts = type === 'tree' ? restPathParts.slice(2) : [];
+	const parts = type === 'tree' ? restPathParts.slice(1) : [];
+
+	return {
+		user,
+		repository,
+		parts,
+		directory: directoryParts.join('/'),
+	};
+}
+
 async function parsePath(
 	user: string,
 	repo: string,
@@ -40,7 +67,7 @@ export function isMainDirectory(url: string) {
 }
 
 export async function getRepositoryInfo(
-	url: string,
+	repositoryInfo: {user: string; repository: string; parts: string[]},
 ): Promise<
 	| {error: string}
 	| {
@@ -59,17 +86,7 @@ export async function getRepositoryInfo(
 		isPrivate: boolean;
 	}
 	> {
-	const [, user, repository, type, ...parts] = cleanUrl(
-		decodeURIComponent(new URL(url).pathname),
-	).split('/');
-
-	if (!user || !repository) {
-		return {error: 'NOT_A_REPOSITORY'};
-	}
-
-	if (type && type !== 'tree') {
-		return {error: 'NOT_A_DIRECTORY'};
-	}
+	const {user, repository, parts} = repositoryInfo;
 
 	const repoInfoResponse = await authenticatedFetch(
 		`https://api.github.com/repos/${user}/${repository}`,
