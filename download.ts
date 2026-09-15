@@ -87,12 +87,11 @@ export async function downloadFile({
 	file: TreeResponseObject | ContentsReponseObject;
 	signal: AbortSignal;
 }) {
-	const token = globalThis.localStorage?.getItem('token');
 	const fileRequest = {
 		user, repository, reference, file, signal,
 	};
 	const localDownload = async () =>
-		isPrivate || token
+		isPrivate
 			? fetchPrivateFile(fileRequest)
 			: fetchPublicFile(fileRequest);
 	const onFailedAttempt = (error: FailedAttemptError) => {

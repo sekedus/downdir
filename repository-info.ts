@@ -55,8 +55,15 @@ export function isMainDirectory(url: string) {
 		return false;
 	}
 
+	let pathname: string;
+	try {
+		({pathname} = new URL(url));
+	} catch {
+		return false;
+	}
+
 	const [, user, repository, type, ...parts] = cleanUrl(
-		decodeURIComponent(new URL(url).pathname),
+		decodeURIComponent(pathname),
 	).split('/');
 
 	if ((!user || !repository) || (type && type !== 'tree')) {
@@ -108,7 +115,7 @@ export async function getRepositoryInfo(
 			gitReference,
 			directory: '',
 			isPrivate,
-			downloadUrl: `https://api.github.com/repos/${user}/${repository}/zipball`,
+			downloadUrl: `https://codeload.github.com/${user}/${repository}/legacy.zip/refs/heads/${gitReference}`,
 		};
 	}
 

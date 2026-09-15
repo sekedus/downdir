@@ -35,7 +35,7 @@ async function listFiles(
 	}
 
 	if (files.truncated) {
-		updateStatus('⚠️ It’s a large repo and this it take a long while just to download the list of files. You might want to use "git sparse checkout" instead.');
+		updateStatus('⚠️️ It’s a large repo and this it take a long while just to download the list of files. You might want to use "git sparse checkout" instead.');
 	}
 
 	return getDirectoryContentViaContentsApi(repoListingConfig);
@@ -47,11 +47,10 @@ function updateStatus(status?: string, ...extra: unknown[]) {
 		const wrapper = document.createElement('div');
 		wrapper.innerHTML = status;
 		element.prepend(wrapper);
+		console.log(status, ...extra);
 	} else {
-		element.innerHTML = status ?? '';
+		element.innerHTML = '';
 	}
-
-	console.log(status, ...extra);
 }
 
 async function getZip() {
@@ -74,6 +73,13 @@ function tokenInput() {
 		}
 	});
 
+	input.addEventListener('focus', event => {
+		// Mobile: ensure the native keyboard popup doesn't cancel the selection
+		setTimeout(() => {
+			(event.target as HTMLInputElement).select();
+		}, 100);
+	});
+
 	document.querySelector('button#clear')!.addEventListener('click', () => {
 		input.value = '';
 		localStorage.removeItem('token');
@@ -83,30 +89,25 @@ function tokenInput() {
 function urlInput(url: string, query: URLSearchParams, repofolder: HTMLInputElement) {
 	const input = document.querySelector('input#url')!;
 	input.value = url;
-	let main = isMainDirectory(input.value);
 
 	input.addEventListener('input', async () => {
-		main = isMainDirectory(input.value);
-		if (main) {
+		if (input.value !== '') {
 			repofolder.parentElement!.classList.remove('no-items');
-		} else {
-			repofolder.parentElement!.classList.add('no-items');
+			repofolder.checked = !isMainDirectory(input.value);
 		}
 	});
 
-	if (main) {
-		if (query.has('without_repo_folder')) {
-			repofolder.checked = true;
-		}
-
-		repofolder.parentElement!.classList.remove('no-items');
+	if (input.value === '') {
+		repofolder.parentElement!.classList.add('no-items');
+	} else if (query.has('without_repo_folder')) {
+		repofolder.checked = true;
 	}
 }
 
 function directDownload(parsedPath: Record<string, unknown>, withoutRepoFolder: HTMLInputElement, isPrivate: boolean) {
 	if ('downloadUrl' in parsedPath && !withoutRepoFolder.checked) {
 		if (isPrivate) {
-			updateStatus('⚠️ Cannot download the entire private repository directly from GitHub. Downloading files "without repo folder" instead.<br>This is related to CORS restrictions. More details: <a href="https://github.com/orgs/community/discussions/106849" target="_blank">community/community#106849</a>');
+			updateStatus('⚠️️ Cannot download the entire private repository directly from GitHub. Downloading files "without repo folder" instead.<br>This is related to CORS restrictions. More details: <a href="https://github.com/orgs/community/discussions/106849" target="_blank">community/community#106849</a>');
 		} else {
 			updateStatus('Downloading the entire repository directly from GitHub');
 			window.location.href = parsedPath['downloadUrl'] as string;
@@ -116,6 +117,29 @@ function directDownload(parsedPath: Record<string, unknown>, withoutRepoFolder: 
 	}
 
 	return false;
+}
+
+function reportPreviewError(error: string) {
+	if (error === 'NOT_A_REPOSITORY') {
+		updateStatus('⚠️ Not a repository');
+	} else if (error === 'NOT_A_DIRECTORY') {
+		updateStatus('⚠️ Not a directory');
+	} else {
+		updateStatus('⚠️ Unknown error');
+	}
+}
+
+function reportRepositoryError(error: string) {
+	// eslint-disable-next-line unicorn/prefer-switch -- I hate how it looks
+	if (error === 'NOT_A_REPOSITORY') {
+		updateStatus('⚠️ Not a repository');
+	} else if (error === 'NOT_A_DIRECTORY') {
+		updateStatus('⚠️ Not a directory');
+	} else if (error === 'REPOSITORY_NOT_FOUND') {
+		updateStatus('⚠️ Repository not found. If it’s private, you should enter a token that can access it.');
+	} else {
+		updateStatus('⚠️ Unknown error');
+	}
 }
 
 const googleDoesntLikeThis = /malware|virus|trojan/i;
@@ -136,20 +160,13 @@ async function init() {
 	}
 
 	if (!navigator.onLine) {
-		updateStatus('⚠️ You are offline.');
+		updateStatus('⚠️️ You are offline.');
 		throw new Error('You are offline');
 	}
 
 	const repositoryPreview = getRepositoryPreview(url);
 	if ('error' in repositoryPreview) {
-		if (repositoryPreview.error === 'NOT_A_REPOSITORY') {
-			updateStatus('⚠ Not a repository');
-		} else if (repositoryPreview.error === 'NOT_A_DIRECTORY') {
-			updateStatus('⚠ Not a directory');
-		} else {
-			updateStatus('⚠ Unknown error');
-		}
-
+		reportPreviewError(repositoryPreview.error);
 		return;
 	}
 
@@ -158,17 +175,7 @@ async function init() {
 	const parsedPath = await getRepositoryInfo(repositoryPreview);
 
 	if ('error' in parsedPath) {
-		// eslint-disable-next-line unicorn/prefer-switch -- I hate how it looks
-		if (parsedPath.error === 'NOT_A_REPOSITORY') {
-			updateStatus('⚠️ Not a repository');
-		} else if (parsedPath.error === 'NOT_A_DIRECTORY') {
-			updateStatus('⚠️ Not a directory');
-		} else if (parsedPath.error === 'REPOSITORY_NOT_FOUND') {
-			updateStatus('⚠️ Repository not found. If it’s private, you should enter a token that can access it.');
-		} else {
-			updateStatus('⚠️ Unknown error');
-		}
-
+		reportRepositoryError(parsedPath.error);
 		return;
 	}
 
@@ -215,7 +222,7 @@ async function init() {
 
 	if (files.length === 0) {
 		if (foundBlockedFiles) {
-			updateStatus('⚠ Some files were blocked due to Google Safe Browsing.');
+			updateStatus('⚠️ Some files were blocked due to Google Safe Browsing.');
 		}
 
 		updateStatus('No files to download');
@@ -223,6 +230,18 @@ async function init() {
 	}
 
 	updateStatus(`Will download ${files.length} files`);
+
+	const filename = query.get('filename')
+		?? [
+			user,
+			repository,
+			gitReference ? gitReference.replaceAll('/', '_') : undefined,
+			directory ? directory.replaceAll('/', '-') : undefined,
+		].filter(Boolean).join('-');
+
+	const zipFilename = filename.endsWith('.zip') ? filename : `${filename}.zip`;
+	const rootFolder = zipFilename.replace(/\.zip$/i, '');
+	const withRepoFolder = !withoutRepoFolder.checked;
 
 	let downloaded = 0;
 
@@ -241,7 +260,8 @@ async function init() {
 			updateStatus(file.path);
 
 			const zip = await zipPromise;
-			const filePath = directory ? file.path.replace(directory + '/', '') : file.path;
+			const relativePath = directory ? file.path.replace(directory + '/', '') : file.path;
+			const filePath = withRepoFolder ? `${rootFolder}/${relativePath}` : relativePath;
 			zip.file(filePath, blob, {
 				binary: true,
 			});
@@ -250,12 +270,12 @@ async function init() {
 		controller.abort();
 
 		if (!navigator.onLine) {
-			updateStatus('⚠️ Could not download all files, network connection lost.');
+			updateStatus('⚠️️ Could not download all files, network connection lost.');
 		} else if (isError(error) && error.message.startsWith('HTTP ')) {
-			updateStatus('⚠️️ Could not download all files.');
+			updateStatus('⚠️️️ Could not download all files.');
 		} else {
 			updateStatus(
-				'⚠️️ Some files were blocked from downloading, try to disable any ad blockers and refresh the page.',
+				'⚠️️️ Some files were blocked from downloading, try to disable any ad blockers and refresh the page.',
 			);
 		}
 
@@ -269,18 +289,9 @@ async function init() {
 		type: 'blob',
 	});
 
-	const filename = query.get('filename')
-		?? [
-			user,
-			repository,
-			gitReference,
-			directory ? directory.replaceAll('/', '-') : undefined,
-		].filter(Boolean).join('-');
-
-	const zipFilename = filename.endsWith('.zip') ? filename : `${filename}.zip`;
 	saveFile(zipBlob, zipFilename);
 	if (foundBlockedFiles) {
-		updateStatus('⚠ Some files were blocked due to Google Safe Browsing.');
+		updateStatus('⚠️ Some files were blocked due to Google Safe Browsing.');
 	}
 
 	updateStatus(`Downloaded ${downloaded} files! Done!`);
@@ -291,7 +302,7 @@ void init().catch(error => {
 	if (error instanceof Error) {
 		switch (error.message) {
 			case 'Invalid token': {
-				updateStatus('⚠️ The token provided is invalid or has been revoked.', {
+				updateStatus('⚠️️ The token provided is invalid or has been revoked.', {
 					token: localStorage.getItem('token'),
 				});
 				break;
@@ -299,14 +310,14 @@ void init().catch(error => {
 
 			case 'Rate limit exceeded': {
 				updateStatus(
-					'⚠️ Your token rate limit has been exceeded. Please wait or add a token',
+					'⚠️️ Your token rate limit has been exceeded. Please wait or add a token',
 					{token: localStorage.getItem('token')},
 				);
 				break;
 			}
 
 			default: {
-				updateStatus(`⚠️ ${error.message}`, error);
+				updateStatus(`⚠️️ ${error.message}`, error);
 				break;
 			}
 		}
