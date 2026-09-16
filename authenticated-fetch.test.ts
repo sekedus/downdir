@@ -13,7 +13,7 @@ function createLocalStorageWithToken(): Storage {
 	return {
 		length: 1,
 		clear: () => undefined,
-		getItem: (key: string) => key === 'token' ? 'token' : null,
+		getItem: (key: string) => key === 'gh_token' ? 'ghp_token' : null,
 		key: () => null,
 		removeItem: () => undefined,
 		setItem: () => undefined,
@@ -35,7 +35,7 @@ test('sends token to the GitHub API', async () => {
 	const authorizationHeader = 'Authorization';
 	expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/user/repo', {
 		headers: {
-			[authorizationHeader]: 'Bearer token',
+			[authorizationHeader]: 'Bearer ghp_token',
 		},
 		method: undefined,
 		signal: undefined,
@@ -65,7 +65,7 @@ test('sends token to GitHub Enterprise API-style URLs', async () => {
 	const authorizationHeader = 'Authorization';
 	expect(fetchMock).toHaveBeenCalledWith('https://ghes.example.com/api/v3/repos/user/repo', {
 		headers: {
-			[authorizationHeader]: 'Bearer token',
+			[authorizationHeader]: 'Bearer ghp_token',
 		},
 		method: undefined,
 		signal: undefined,

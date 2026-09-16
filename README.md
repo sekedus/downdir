@@ -6,8 +6,11 @@ GitHub doesn’t let you download a single folder from a repo, which might be ne
 
 This tool will handle the download of all the files in a directory, in a single click, after you entered your token.
 
-> You can create a [new token here](https://github.com/settings/personal-access-tokens/new), [example](https://imgbb.com/VWBGvhHm).
+You can create a [new GitHub token here](https://github.com/settings/personal-access-tokens/new). For reference, see this [example GitHub personal access token (PAT)](https://imgbb.com/VWBGvhHm).
 
+<br>
+
+## Usage
 
 The download starts automatically when you visit pass the link to the GitHub directory as `url` parameter, like:
 
@@ -19,7 +22,9 @@ You can also specify download filename by adding `filename` parameter, like:
 
 This is an alternative to the existing [GitZip](https://kinolien.github.io/gitzip/) and [DownGit](https://minhaskamal.github.io/DownGit/) but without the cruft.
 
-## Development Guide
+<br>
+
+## Development
 
 To run the project locally or contribute, follow these steps:
 
@@ -61,10 +66,34 @@ Make sure you have the following installed:
    * Parcel dev server at [http://localhost:1234](http://localhost:1234)
    * Vitest in watch mode for unit testing
 
+---
+
+### `GITHUB_TOKEN` for tests
+
+Integration tests call the live GitHub API, so running them without a token can quickly run into [rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#exceeding-the-rate-limit).
+
+If that happens, just set a `GITHUB_TOKEN` – either as an environment variable or in a local `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Then put your token in there. If both are set, the environment variable takes precedence.
+
+When present, [vitest.setup.ts](./vitest.setup.ts) picks it up and feeds it to [`authenticated-fetch.ts`](./authenticated-fetch.ts) as the `gh_token` in `localStorage`.
+
+When it's missing, nothing changes – tests just run unauthenticated like before. CI does the same thing with `secrets.GITHUB_TOKEN`.
+
+This only affects tests. The dev server (`localhost:1234`) doesn't read `GITHUB_TOKEN` – for that, paste your token into the token field on the page.
+
+<br>
+
 ## Related
 
 - [list-github-dir-content](https://github.com/fregante/list-github-dir-content) - List all the files in a GitHub repo’s directory
 - [Refined GitHub](https://github.com/refined-github/refined-github) - Browser extension that adds a link to this app to GitHub (and much more)
+
+<br>
 
 ## License
 

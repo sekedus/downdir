@@ -9,7 +9,7 @@ import {
 } from 'list-github-dir-content';
 import pMap from 'p-map';
 import {downloadFile} from './download.js';
-import {isMainDirectory, getRepositoryInfo, getRepositoryPreview} from './repository-info.js';
+import {isMainTree, getRepositoryInfo, getRepositoryPreview} from './repository-info.js';
 
 type ApiOptions = ListGithubDirectoryOptions & {getFullData: true; isPrivate: boolean};
 
@@ -62,14 +62,14 @@ async function getZip() {
 
 function tokenInput() {
 	const input = document.querySelector('input#token')!;
-	const token = localStorage.getItem('token');
+	const token = localStorage.getItem('gh_token');
 	if (token) {
 		input.value = token;
 	}
 
 	input.addEventListener('input', () => {
 		if (input.validity.valid) {
-			localStorage.setItem('token', input.value);
+			localStorage.setItem('gh_token', input.value);
 		}
 	});
 
@@ -82,18 +82,19 @@ function tokenInput() {
 
 	document.querySelector('button#clear')!.addEventListener('click', () => {
 		input.value = '';
-		localStorage.removeItem('token');
+		localStorage.removeItem('gh_token');
 	});
 }
 
-function urlInput(url: string, query: URLSearchParams, repofolder: HTMLInputElement) {
+async function urlInput(url: string, query: URLSearchParams, repofolder: HTMLInputElement) {
 	const input = document.querySelector('input#url')!;
 	input.value = url;
 
 	input.addEventListener('input', async () => {
 		if (input.value !== '') {
+			const mainTree = await isMainTree(input.value);
+			repofolder.checked = !mainTree;
 			repofolder.parentElement!.classList.remove('no-items');
-			repofolder.checked = !isMainDirectory(input.value);
 		}
 	});
 
@@ -152,7 +153,7 @@ async function init() {
 	const url = query.get('url');
 	const withoutRepoFolder = document.querySelector('input#repo-folder')!;
 
-	urlInput(url ?? '', query, withoutRepoFolder);
+	await urlInput(url ?? '', query, withoutRepoFolder);
 	tokenInput();
 
 	if (!url) {
@@ -204,7 +205,7 @@ async function init() {
 		repository,
 		ref: gitReference,
 		directory,
-		token: localStorage.getItem('token') ?? undefined,
+		token: localStorage.getItem('gh_token') ?? undefined,
 		getFullData: true,
 		isPrivate,
 	});
@@ -250,7 +251,7 @@ async function init() {
 			const blob = await downloadFile({
 				user,
 				repository,
-				reference: gitReference!,
+				reference: gitReference,
 				file,
 				isPrivate,
 				signal,
@@ -303,16 +304,24 @@ void init().catch(error => {
 		switch (error.message) {
 			case 'Invalid token': {
 				updateStatus('⚠️️ The token provided is invalid or has been revoked.', {
-					token: localStorage.getItem('token'),
+					token: localStorage.getItem('gh_token'),
 				});
 				break;
 			}
 
 			case 'Rate limit exceeded': {
-				updateStatus(
-					'⚠️️ Your token rate limit has been exceeded. Please wait or add a token',
-					{token: localStorage.getItem('token')},
-				);
+				const token = localStorage.getItem('gh_token');
+				if (token) {
+					updateStatus(
+						'⚠️️ Your token rate limit has been exceeded. Please wait or add a new token.',
+						{token},
+					);
+				} else {
+					updateStatus(
+						'⚠️️ GitHub public API rate limit has been exceeded. Please wait or add a token.',
+					);
+				}
+
 				break;
 			}
 

@@ -12,7 +12,6 @@ test('getRepositoryPreview', () => {
 		user: 'wesbos',
 		repository: 'JavaScript30',
 		parts: ['master', '01 - JavaScript Drum Kit', 'sounds'],
-		directory: '01 - JavaScript Drum Kit/sounds',
 	});
 });
 
@@ -37,22 +36,23 @@ test('getRepositoryInfo', async () => {
 	await expect(getRepositoryInfo(sandboxDurian as {user: string; repository: string; parts: string[]})).resolves.toMatchInlineSnapshot(`
 		{
 		  "directory": "",
-		  "downloadUrl": "https://api.github.com/repos/refined-github/sandbox/zipball/durian",
+		  "downloadUrl": "https://codeload.github.com/refined-github/sandbox/legacy.zip/refs/heads/durian",
 		  "gitReference": "durian",
 		  "isPrivate": false,
 		  "repository": "sandbox",
 		  "user": "refined-github",
 		}
 	`);
-	const sandboxSlashes = getRepositoryPreview('https://github.com/refined-github/sandbox/tree/branch/with/slashes');
+	const sandboxSlashes = getRepositoryPreview('https://github.com/microsoft/VFSForGit/tree/milestones/m275');
 	expect(sandboxSlashes).not.toHaveProperty('error');
 	await expect(getRepositoryInfo(sandboxSlashes as {user: string; repository: string; parts: string[]})).resolves.toMatchInlineSnapshot(`
 		{
 		  "directory": "",
-		  "gitReference": "branch/with/slashes",
+		  "downloadUrl": "https://codeload.github.com/microsoft/VFSForGit/legacy.zip/refs/heads/milestones/m275",
+		  "gitReference": "milestones/m275",
 		  "isPrivate": false,
-		  "repository": "sandbox",
-		  "user": "refined-github",
+		  "repository": "VFSForGit",
+		  "user": "microsoft",
 		}
 	`);
 	const sandboxWorkflows = getRepositoryPreview('https://github.com/refined-github/sandbox/tree/default-a/.github/workflows');
@@ -71,7 +71,7 @@ test('getRepositoryInfo', async () => {
 	await expect(getRepositoryInfo(microsoftTypescript as {user: string; repository: string; parts: string[]})).resolves.toMatchInlineSnapshot(`
 		{
 		  "directory": "",
-		  "downloadUrl": "https://api.github.com/repos/microsoft/typescript/zipball",
+		  "downloadUrl": "https://codeload.github.com/microsoft/typescript/legacy.zip/refs/heads/main",
 		  "gitReference": "main",
 		  "isPrivate": false,
 		  "repository": "typescript",
@@ -83,7 +83,7 @@ test('getRepositoryInfo', async () => {
 	await expect(getRepositoryInfo(domaDevelop as {user: string; repository: string; parts: string[]})).resolves.toMatchInlineSnapshot(`
 		{
 		  "directory": "",
-		  "downloadUrl": "https://api.github.com/repos/fregante/doma/zipball/develop",
+		  "downloadUrl": "https://codeload.github.com/fregante/doma/legacy.zip/refs/heads/develop",
 		  "gitReference": "develop",
 		  "isPrivate": false,
 		  "repository": "doma",
